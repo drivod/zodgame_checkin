@@ -188,7 +188,7 @@ def zodgame(cookie_string, webhook_url=None, auth_header=None):
             lambda x: x.title != "Just a moment..."
         )
         assert len(driver.find_elements(By.XPATH, '//a[text()="用户名"]')) == 0, "Login fails. Please check your cookie."
-        userName = driver.find_element(By.XPATH, '//a[text()="用户名"]').text
+        userName = driver.find_element(By.XPATH, '//a[@class="xi2"]').get_attribute("textContent")
             
         formhash = driver.find_element(By.XPATH, '//input[@name="formhash"]').get_attribute('value')
         
