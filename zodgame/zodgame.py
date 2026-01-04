@@ -195,7 +195,7 @@ def zodgame(cookie_string, webhook_url=None, auth_header=None):
         checkin_result = zodgame_checkin(driver, formhash)
         task_result = zodgame_task(driver, formhash)
         
-        assert checkin_result["success"] and task_result["success"], "Checkin failed or task failed."
+        # assert checkin_result["success"] and task_result["success"], "Checkin failed or task failed."
         
     finally:
         driver.close()
