@@ -138,7 +138,7 @@ def send_webhook_notification(webhook_url, auth_header, userName, checkin_result
             "timestamp": datetime.now().isoformat(),
             "data": {
                 "content": "zodgame签到与任务结果通知\n "+
-                           f"用户: {userName[0].text}\n "+
+                           f"用户: {userName}\n "+
                            f"签到结果: {checkin_result['message']}",
             }
         }
