@@ -207,10 +207,8 @@ def zodgame(cookie_string, webhook_url=None, auth_header=None):
     
 if __name__ == "__main__":
     cookie_string = sys.argv[1]
+    webhook_url = sys.argv[2]
+    auth_header = sys.argv[3]
     assert cookie_string
-    
-    # 从环境变量读取webhook URL和Authorization header
-    webhook_url = os.getenv("ZODGAME_WEBHOOK_URL")
-    auth_header = os.getenv("ZODGAME_AUTHORIZATION")
-    
+
     zodgame(cookie_string, webhook_url, auth_header)
