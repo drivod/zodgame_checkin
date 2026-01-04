@@ -124,7 +124,7 @@ def zodgame_task(driver, formhash):
         "message": "任务完成" if success else "任务失败"
     }
 
-def send_webhook_notification(webhook_url, auth_header, userName, checkin_result, task_result):
+def send_webhook_notification(webhook_url, auth_header, checkin_result, task_result):
     """
     发送webhook通知到远程服务器
     """
@@ -138,7 +138,6 @@ def send_webhook_notification(webhook_url, auth_header, userName, checkin_result
             "timestamp": datetime.now().isoformat(),
             "data": {
                 "content": "zodgame签到与任务结果通知\n "+
-                           f"用户: {userName}\n "+
                            f"签到结果: {checkin_result['message']}",
             }
         }
@@ -188,7 +187,6 @@ def zodgame(cookie_string, webhook_url=None, auth_header=None):
             lambda x: x.title != "Just a moment..."
         )
         assert len(driver.find_elements(By.XPATH, '//a[text()="用户名"]')) == 0, "Login fails. Please check your cookie."
-        userName = driver.find_element(By.XPATH, '//a[@class="xi2"]').get_attribute("textContent")
             
         formhash = driver.find_element(By.XPATH, '//input[@name="formhash"]').get_attribute('value')
         
@@ -203,7 +201,7 @@ def zodgame(cookie_string, webhook_url=None, auth_header=None):
         
         # 发送webhook通知
         if webhook_url:
-            send_webhook_notification(webhook_url, auth_header, userName, checkin_result, task_result)
+            send_webhook_notification(webhook_url, auth_header, checkin_result, task_result)
     
 if __name__ == "__main__":
     cookie_string = sys.argv[1]
