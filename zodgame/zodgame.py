@@ -2,11 +2,15 @@
 import io
 import re
 import sys
+import os
+import json
+from datetime import datetime
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer,encoding='utf-8')
 
 import undetected_chromedriver as uc
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
+import requests
 
 def zodgame_checkin(driver, formhash):
     checkin_url = "https://zodgame.xyz/plugin.php?id=dsu_paulsign:sign&operation=qiandao&infloat=1&inajax=0"    
@@ -28,7 +32,11 @@ def zodgame_checkin(driver, formhash):
     match = re.search('<div class="c">\r\n(.*?)</div>\r\n', resp["response"], re.S)
     message = match[1] if match is not None else "签到失败"
     print(f"【签到】{message}")
-    return "恭喜你签到成功!" in message or "您今日已经签到，请明天再来" in message
+    success = "恭喜你签到成功!" in message or "您今日已经签到，请明天再来" in message
+    return {
+        "success": success,
+        "message": message
+    }
 
 
 def zodgame_task(driver, formhash):
@@ -111,51 +119,98 @@ def zodgame_task(driver, formhash):
     
     show_task_reward(driver)
 
-    return success
+    return {
+        "success": success,
+        "message": "任务完成" if success else "任务失败"
+    }
 
-def zodgame(cookie_string):
+def send_webhook_notification(webhook_url, auth_header, userName, checkin_result, task_result):
+    """
+    发送webhook通知到远程服务器
+    """
+    try:
+        headers = {"Content-Type": "application/json"}
+        if auth_header:
+            headers["Authorization"] = auth_header
+        
+        data = {
+            "webhookEventTypeEnum": "GENERAL_EVENT",
+            "timestamp": datetime.now().isoformat(),
+            "data": {
+                "content": "zodgame签到与任务结果通知\n "+
+                           f"用户: {userName[0].text}\n "+
+                           f"签到结果: {checkin_result['message']}",
+            }
+        }
+        
+        response = requests.post(webhook_url, json=data, headers=headers, timeout=10)
+        print(f"【Webhook】通知成功: {response.status_code}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"【Webhook】通知失败: {str(e)}")
+        return False
+
+def zodgame(cookie_string, webhook_url=None, auth_header=None):
     options = uc.ChromeOptions()
     options.add_argument("--disable-popup-blocking")
     driver = uc.Chrome(driver_executable_path = """C:\SeleniumWebDrivers\ChromeDriver\chromedriver.exe""",
                        browser_executable_path = """C:\Program Files\Google\Chrome\Application\chrome.exe""",
                        options = options)
 
-    # Load cookie
-    driver.get("https://zodgame.xyz/")
-
-    if cookie_string.startswith("cookie:"):
-        cookie_string = cookie_string[len("cookie:"):]
-    cookie_string = cookie_string.replace("/","%2")
-    cookie_dict = [ 
-        {"name" : x.split('=')[0].strip(), "value": x.split('=')[1].strip()} 
-        for x in cookie_string.split(';')
-    ]
-
-    driver.delete_all_cookies()
-    for cookie in cookie_dict:
-        if cookie["name"] in ["qhMq_2132_saltkey", "qhMq_2132_auth"]:
-            driver.add_cookie({
-                "domain": "zodgame.xyz",
-                "name": cookie["name"],
-                "value": cookie["value"],
-                "path": "/",
-            })
+    checkin_result = None
+    task_result = None
     
-    driver.get("https://zodgame.xyz/")
-    
-    WebDriverWait(driver, 240).until(
-        lambda x: x.title != "Just a moment..."
-    )
-    assert len(driver.find_elements(By.XPATH, '//a[text()="用户名"]')) == 0, "Login fails. Please check your cookie."
+    try:
+        # Load cookie
+        driver.get("https://zodgame.xyz/")
+
+        if cookie_string.startswith("cookie:"):
+            cookie_string = cookie_string[len("cookie:"):]
+        cookie_string = cookie_string.replace("/","%2")
+        cookie_dict = [ 
+            {"name" : x.split('=')[0].strip(), "value": x.split('=')[1].strip()} 
+            for x in cookie_string.split(';')
+        ]
+
+        driver.delete_all_cookies()
+        for cookie in cookie_dict:
+            if cookie["name"] in ["qhMq_2132_saltkey", "qhMq_2132_auth"]:
+                driver.add_cookie({
+                    "domain": "zodgame.xyz",
+                    "name": cookie["name"],
+                    "value": cookie["value"],
+                    "path": "/",
+                })
         
-    formhash = driver.find_element(By.XPATH, '//input[@name="formhash"]').get_attribute('value')
-    assert zodgame_checkin(driver, formhash) and zodgame_task(driver, formhash), "Checkin failed or task failed."
-
-    driver.close()
-    driver.quit()
+        driver.get("https://zodgame.xyz/")
+        
+        WebDriverWait(driver, 240).until(
+            lambda x: x.title != "Just a moment..."
+        )
+        assert len(driver.find_elements(By.XPATH, '//a[text()="用户名"]')) == 0, "Login fails. Please check your cookie."
+        userName = driver.find_elements(By.XPATH, '//a[text()="用户名"]')
+            
+        formhash = driver.find_element(By.XPATH, '//input[@name="formhash"]').get_attribute('value')
+        
+        checkin_result = zodgame_checkin(driver, formhash)
+        task_result = zodgame_task(driver, formhash)
+        
+        assert checkin_result["success"] and task_result["success"], "Checkin failed or task failed."
+        
+    finally:
+        driver.close()
+        driver.quit()
+        
+        # 发送webhook通知
+        if webhook_url:
+            send_webhook_notification(webhook_url, auth_header, userName, checkin_result, task_result)
     
 if __name__ == "__main__":
     cookie_string = sys.argv[1]
     assert cookie_string
     
-    zodgame(cookie_string)
+    # 从环境变量读取webhook URL和Authorization header
+    webhook_url = os.getenv("ZODGAME_WEBHOOK_URL")
+    auth_header = os.getenv("ZODGAME_AUTHORIZATION")
+    
+    zodgame(cookie_string, webhook_url, auth_header)
